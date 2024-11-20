@@ -15,9 +15,11 @@ import json
 ##################################################################
 tdrstyle.setTDRStyle()
 gStyle.SetOptFit(0)
-CMS_lumi.lumi_13TeV = "35.9 fb^{-1}"
-CMS_lumi.writeExtraText = 0
-CMS_lumi.extraText = "Preliminary"
+gStyle.SetOptStat(0);
+CMS_lumi.lumi_13TeV = "59.8 fb^{-1}"
+CMS_lumi.cmsTextFont = 40
+CMS_lumi.writeExtraText = 1
+CMS_lumi.extraText = "Simulation"
 CMS_lumi.lumi_sqrtS = "13 TeV" # used with iPeriod = 0, e.g. for simulation-only plots (default is an empty string)
 iPos = 11
 if( iPos==0 ): CMS_lumi.relPosX = 0.12
@@ -70,7 +72,7 @@ useMET         = plotSettings['useMET']
 #InjectSignal   = 1
 #useMET         = 1
 
-Lumi           = 35900
+Lumi           = 59800
 #f_outlier     = null
 
 
@@ -92,6 +94,29 @@ FracNormErrors_exc4      = {}
 NormFactors_exc3         = {}
 FracNormErrors_exc3      = {}
 STup = 9000
+
+def atlas2(x, par):
+    if x[0] <= 0 or x[0] >= 13000:
+        return 0  # or some other appropriate value
+    
+    term1 = par[0] * (1 - (x[0]/13000)**(1.0/3.0))**par[1]
+    term2 = (x[0]/13000)**(par[2] + par[3]*(TMath.Log(x[0]/13000))**2)
+    
+    if term2 == 0:
+        return 0  # or some other appropriate value
+    
+    return term1 / term2
+
+# Define parameters
+p0_2 = 1.39257e5
+p1_2 = 9.49925
+p2_2 = 2.68595
+p3_2 = 1.01898e-1
+
+# Create TF1 object
+atlas2_func = TF1("atlas2_func", atlas2, 0, 13000, 4)
+atlas2_func.SetParameters(p0_2, p1_2, p2_2, p3_2)
+
 def getratio(f1,f2):
     formula = "("+f1.GetExpFormula("p").Data() + ")/(" + f2.GetExpFormula("p").Data()+")-1"
     fname = f1.GetName()+"_over_+"+f2.GetName()
@@ -118,6 +143,8 @@ def getEnvelopeFunctions(bestfit, functions, xlow, xup, mode):
     #get the position of the best fit
     i=0
     fnames= []
+    #print "envelop best fit = ", bestfit
+    #print "functionss = ",functions
     for f in functions:
         difference =  bestfit.Eval(xup)  -  f.Eval(xup)
         if abs(difference) ==0:
@@ -247,10 +274,10 @@ def GraphIntegrate(g, a, b, n):
 
 # Add normalization error to fLow and fUp, return as TGraph. normErr given in fraction.
 def getNormErrorGraphs(fLow,fUp,fbest, normErr,RelOrAbs):
-    fLow_norm = TGraph()
+    fLowo_norm = TGraph()
     fUp_norm  = TGraph()
     fUp_norm.SetName( fUp.GetName() + "_norm")
-    fLow_norm.SetName( fLow.GetName() + "_norm")
+    fLow_nrm.SetName( fLow.GetName() + "_norm")
     for x in np.arange(fUp.GetXmin(),fUp.GetXmax(),50):
         shape_err = (fUp.Eval(x) - fbest.Eval(x))
         norm_err  = fbest.Eval(x)* normErr
@@ -300,7 +327,7 @@ def getRatioFillGraph(fLow, fUp, fbest, normErr):
     #Graphs with shape + normalization errors
     gUp_norm  =TGraph()
     gDown_norm=TGraph()
-    gDown_norm, gUp_norm = getNormErrorGraphs(fLow,fUp,fbest,normErr,"Rel")
+    # gDown_norm, gUp_norm = getNormErrorGraphs(fLow,fUp,fbest,normErr,"Rel")
     for x in np.arange(fLow.GetXmin(),fLow.GetXmax(),50):
         if(not fbest.Eval(x)==0):
             if DrawRatioPanel:
@@ -350,31 +377,55 @@ def getNormalizedFunctionWithChi2(f, hist, ExcOrInc, j, STlow=0, STup=0):
     #For exclusive multiplicity, calculate chi2 in Fitting region to judge quality of fit
     if (ExcOrInc=="Exc"):
         LowerNormBound    = float(fitNormRanges.getLowerNormBound("exc%i"%j))
+        #print "LowerNormBound=", LowerNormBound
         UpperNormBound    = float(fitNormRanges.getUpperNormBound("exc%i"%j))
+        #print "UpperNormBound=", UpperNormBound
         lowerNormBin      = hist.GetXaxis().FindBin(LowerNormBound)
+        #lowerNormBin      = int(LowerNormBound/100 + 1)
+        #print "lowerNormBin=", lowerNormBin
         upperNormBin      = hist.GetXaxis().FindBin(UpperNormBound)
+        #upperNormBin      = int(UpperNormBound/100 + 1)
+        #print "upperNormBin=", upperNormBin
         lowerNormBin_ref  = normHist.GetXaxis().FindBin(LowerNormBound)
+        #lowerNormBin_ref      = int(LowerNormBound/100 + 1)
         upperNormBin_ref  = normHist.GetXaxis().FindBin(UpperNormBound)
+        #upperNormBin_ref      = int(UpperNormBound/100 + 1)
     #For inclusive multiplicity, calculate chi2 in norm region for reference.
     if (ExcOrInc=="Inc"):
         LowerNormBound    = float(fitNormRanges.getLowerNormBound("inc%i"%j))
+        #print "LowerNormBound=", LowerNormBound
         UpperNormBound    = float(fitNormRanges.getUpperNormBound("inc%i"%j))
+        #print "UpperNormBound=", UpperNormBound
         lowerNormBin      = hist.GetXaxis().FindBin(LowerNormBound)
+        #lowerNormBin      = int(LowerNormBound/100 + 1)
+        #print "lowerNormBin=", lowerNormBin
         upperNormBin      = hist.GetXaxis().FindBin(UpperNormBound)
+        #upperNormBin      = int(UpperNormBound/100 + 1)
+        #print "upperNormBin=", upperNormBin
         lowerNormBin_ref  = normHist.GetXaxis().FindBin(LowerNormBound)
+        #lowerNormBin_ref      = int(LowerNormBound/100 + 1)
         upperNormBin_ref  = normHist.GetXaxis().FindBin(UpperNormBound)
+        #upperNormBin_ref      = int(UpperNormBound/100 + 1)
 
     for normbin in range(lowerNormBin, upperNormBin):
         histBinTotal+=hist.GetBinContent(normbin)
+        #print "histBinContent=", hist.GetBinContent(normbin)
         histBinwidth = hist.GetBinWidth(normbin)
+        #print "normbin=", normbin
         #histBinTotal+=hist.GetBinContent(normbin)
     for normbin in range(lowerNormBin_ref, upperNormBin_ref):
         normBinTotal+=normHist.GetBinContent(normbin)
+        #print "normBinContent=", normHist.GetBinContent(normbin)
         normBinwidth = normHist.GetBinWidth(normbin)
+        #print "normbin=", normbin
         #normBinTotal+=normHist.GetBinContent(normbin)
-
+    #print "histBinTotal=", histBinTotal
+    #print "histBinwidth=", histBinwidth
+    #print "normBinTotal=", normBinTotal
+    #print "normBinwidth=", normBinwidth
     #normfactor =  (normBinTotal/f.Integral(xlowedge, xupedge))*binwidth
     normfactor =  histBinTotal*histBinwidth/(normBinTotal *normBinwidth)
+    print "normfactor=", normfactor
     #FracNormErr    = sqrt(1.0/sqrt(histBinTotal)+1.0/sqrt(normBinTotal))
     FracNormErr    =  sqrt(1.0/histBinTotal+1.0/normBinTotal)
     NormErr        = FracNormErr * normfactor
@@ -488,6 +539,7 @@ def customfit(f, Sthist, ExcN):
     fitPamTable.append(pars)
     print "Done fitting %s, %s has chi2perNDF = %.5f :"%(f.GetName(), f.GetName(), chi2pNDF)
     print "Chi2 value", f.GetChisquare()
+    print "NDF: ", f.GetNDF()
     #for x in chi2chklist:
     #    print x["ST"],"%.3f"%x["chi2term"]
 
@@ -524,8 +576,8 @@ def PickBestFit(fdict):
 def setBestFit(functions):
     print functions
     for f in functions:
-        print "fbestName", fbestName
-        print f
+        #print "fbestName", fbestName
+        #print f
         fname = f.GetName()
         if fbestName in fname:
             return f
@@ -542,6 +594,38 @@ def weightSignal(signalhist, xsection, lumi,Ngen):
     signalhist.Scale(Weight)
     return signalhist
 
+
+def normalizeFunction(func, hist, refHist, xmin, xmax):
+    # # Get the bin width
+    # histBinwidth = hist.GetBinWidth(1)  # Assuming uniform bin width
+    
+    # # Calculate histBinTotal
+    # histBinTotal = hist.Integral(hist.FindBin(xmin), hist.FindBin(xmax))
+    
+    # # Calculate normBinTotal (integral of the function)
+    # normBinTotal = func.Integral(xmin, xmax)
+    
+    # # Calculate norm_factor
+    # norm_factor = (histBinTotal * histBinwidth) / (normBinTotal * histBinwidth)
+    lowerNormBin = hist.FindBin(xmin)
+    upperNormBin = hist.FindBin(xmax)
+    lowerNormBin_ref = refHist.FindBin(xmin)
+    upperNormBin_ref = refHist.FindBin(xmax)
+
+    histBinTotal = 0
+    normBinTotal = 0
+
+    for normbin in range(lowerNormBin, upperNormBin):
+        histBinTotal += hist.GetBinContent(normbin)
+        histBinwidth = hist.GetBinWidth(normbin)
+
+    for normbin in range(lowerNormBin_ref, upperNormBin_ref):
+        normBinTotal += refHist.GetBinContent(normbin)
+        normBinwidth = refHist.GetBinWidth(normbin)
+
+    norm_factor = histBinTotal * histBinwidth / (normBinTotal * normBinwidth)
+    #func.SetParameter(0, func.GetParameter(0) * scale_factor)
+    return func, norm_factor
 ###################################
 ##  This function takes stHist, get normalized fit function, symmetrize it and draw it on a canvas
 ##
@@ -588,24 +672,24 @@ def NormAndDrawST(stHist,j,ExcOrInc,stRefHist,WriteCanvas,Signals=None):
     g = TGraphAsymmErrors()
     g.SetMarkerStyle(8)
     g.SetMarkerSize(0.7)
-    for ibin in range(0,stHist.GetNbinsX()):
-        x    = stHist.GetBinCenter(ibin)
-        y    = stHist.GetBinContent(ibin)
-        erry = stHist.GetBinError(ibin)
-        U = Math.gamma_quantile_c(alpha/2,y+1,1.0)
-        if not y==0:    L = Math.gamma_quantile(alpha/2,y,1.0)
-        else:           L = 0
-        deltaU = U - y
-        deltaL = y - L
-        if stHist.GetBinContent(ibin)==0:
-            stHist.SetBinError(ibin,deltaU)
-        elif y<50:
-            #stHist.SetBinError(ibin,0)
-            g.SetPoint(g.GetN(), x, y)
-            g.SetPointEYlow(g.GetN()-1, deltaL)
-            g.SetPointEYhigh(g.GetN()-1, deltaU)
-            #print "%.4f, %.4f, %.4f, %.4f"%(x,errX, deltaU, deltaL)
-            #stHist.SetBinError(ibin,max([errX,deltaU,deltaL]))
+    #for ibin in range(0,stHist.GetNbinsX()):
+    #    x    = stHist.GetBinCenter(ibin)
+    #    y    = stHist.GetBinContent(ibin)
+    #    erry = stHist.GetBinError(ibin)
+    #    U = Math.gamma_quantile_c(alpha/2,y+1,1.0)
+    #    if not y==0:    L = Math.gamma_quantile(alpha/2,y,1.0)
+    #    else:           L = 0
+    #    deltaU = U - y
+    #    deltaL = y - L
+    #    if stHist.GetBinContent(ibin)==0:
+    #        stHist.SetBinError(ibin,deltaU)
+    #    elif y<50:
+    #        #stHist.SetBinError(ibin,0)
+    #        g.SetPoint(g.GetN(), x, y)
+    #        g.SetPointEYlow(g.GetN()-1, deltaL)
+    #        g.SetPointEYhigh(g.GetN()-1, deltaU)
+    #        #print "%.4f, %.4f, %.4f, %.4f"%(x,errX, deltaU, deltaL)
+    #        #stHist.SetBinError(ibin,max([errX,deltaU,deltaL]))
 
     for ibin in range(stHist.GetNbinsX(),0,-1):
         x = stHist.GetBinCenter(ibin)
@@ -669,14 +753,18 @@ def NormAndDrawST(stHist,j,ExcOrInc,stRefHist,WriteCanvas,Signals=None):
     #fbest     = functions[ chi2_devlist.index( min(chi2_devlist) ) ]
     #fbest = pickBestFit( functions, chi2_devlist )
     print "Start setBestFit"
-    fbest = setBestFit( functions )
+    #fbest = setBestFit( functions )
+    fbest = atlas2_func
     print "return setbestfit value"
     print fbest
     print "-----------------------------------------"
-    print "In N=%i, fbest is chosen to be %s\n"%(j,fbest.GetName())
+    print "In N=%i, fbest is set to %s\n"%(j, fbest.GetName())
 
-    fLow,fUp  = getEnvelopeFunctions( fbest, functions, 2500, 11000, "shade")
-    fillGraph = getFillGraph( fLow, fUp )
+    functions = [f for f in functions if f.GetName() != "atlas2"]  # Remove any existing atlas2 function
+    functions.append(atlas2_func)
+
+    # fLow,fUp  = getEnvelopeFunctions( fbest, functions, 2500, 13000, "shade")
+    # fillGraph = getFillGraph( fLow, fUp )
     if (ExcOrInc=="Exc"):
         x1   = fitNormRanges.getLowerFitBound("exc%i"%j)
         #y1   = plotSettings['ymin']
@@ -684,7 +772,7 @@ def NormAndDrawST(stHist,j,ExcOrInc,stRefHist,WriteCanvas,Signals=None):
         x2   = fitNormRanges.getUpperFitBound("exc%i"%j)
         gPad.Update()
         y2   = 10**gPad.GetUymax()
-        fLow_norm,fUp_norm= getNormErrorGraphs( fLow, fUp, fbest, 0 ,"Abs")
+        # fLow_norm,fUp_norm= getNormErrorGraphs( fLow, fUp, fbest, 0 ,"Abs")
     if (ExcOrInc=="Inc"):
         x1   = fitNormRanges.getLowerNormBound("inc%i"%j)
         #y1   = plotSettings['ymin']
@@ -693,34 +781,56 @@ def NormAndDrawST(stHist,j,ExcOrInc,stRefHist,WriteCanvas,Signals=None):
         gPad.Update()
         y2   = 10**gPad.GetUymax()
         print "In N>=%i, fractional errors to be %s\n"%(j,FracNormErrors_exc3["Inc%s"%j])
-        fLow_norm,fUp_norm= getNormErrorGraphs( fLow, fUp, fbest, FracNormErrors_exc3["Inc%s"%j] ,"Abs")
+        # fLow_norm,fUp_norm= getNormErrorGraphs( fLow, fUp, fbest, FracNormErrors_exc3["Inc%s"%j] ,"Abs")
         #fLow_norm,fUp_norm= getNormErrorGraphs( fLow, fUp, fbest, 0 ,"Abs")
     box  = TBox(x1,y1,x2,y2)
     box.SetFillColorAlpha(kYellow,0.3)
     box.SetFillStyle(3002)
 
+    # fbest, normal_factor = normalizeFunction(fbest, stHist, stRefHist, x1, x2)
+    # print "normal_factor", normal_factor
+
+    # Clone fbest to preserve its original shape
+    fbest = atlas2_func.Clone("fbest")
+    print("fbest_shape formula: %s" % fbest.GetExpFormula())
+    print("fbest_shape parameters:")
+    for i in range(fbest.GetNpar()):
+        print("  Parameter %d: %f" % (i, fbest.GetParameter(i)))
+
+
+    hist_ref_integral = stRefHist.Integral(stRefHist.FindBin(x1), stRefHist.FindBin(x2))
+    func_integral = fbest.Integral(x1, x2)
+    norm_factor_ref = hist_ref_integral / func_integral
+    # Create a new function with the same formula as fbest
+    fbest.SetParameter(0, fbest.GetParameter(0) * norm_factor_ref)
+    print("fbest normalized to stRefHist")
+        
+    # Now use normalizeFunction to get fbest_normalized and norm_factor for stHist
+    fbest_normalized, norm_factor = normalizeFunction(fbest, stHist, stRefHist, x1, x2)
+    
+
     if DrawUncertainty:
-        fillGraph.SetFillColorAlpha(kGray,0.35)
-        fillGraph.SetLineColor(kBlue)
-        fillGraph.Draw("sameF")
+        # fillGraph.SetFillColorAlpha(kGray,0.35)
+        # fillGraph.SetLineColor(kBlue)
+        # fillGraph.Draw("sameF")
         stHist.Draw("sameEP")
         box.Draw("same")
 
-        fUp.SetLineColor(kBlue)
-        fUp.SetLineStyle(1)
-        fUp.SetLineWidth(1)
-        fLow.SetLineColor(kBlue)
-        fLow.SetLineWidth(1)
-        fLow.Draw("SAME")
-        fUp.Draw("SAME")
-        fUp_norm.SetLineColor(kRed)
-        fUp_norm.SetLineStyle(1)
-        fUp_norm.SetLineWidth(1)
-        fUp_norm.Draw("LSAME")
-        fLow_norm.SetLineColor(kRed)
-        fLow_norm.SetLineStyle(1)
-        fLow_norm.SetLineWidth(1)
-        fLow_norm.Draw("LSAME")
+        # fUp.SetLineColor(kBlue)
+        # fUp.SetLineStyle(1)
+        # fUp.SetLineWidth(1)
+        # fLow.SetLineColor(kBlue)
+        # fLow.SetLineWidth(1)
+        # fLow.Draw("SAME")
+        # fUp.Draw("SAME")
+        # fUp_norm.SetLineColor(kRed)
+        # fUp_norm.SetLineStyle(1)
+        # fUp_norm.SetLineWidth(1)
+        # fUp_norm.Draw("LSAME")
+        # fLow_norm.SetLineColor(kRed)
+        # fLow_norm.SetLineStyle(1)
+        # fLow_norm.SetLineWidth(1)
+        # fLow_norm.Draw("LSAME")
 
         fbest.SetLineColor(kBlue)
         fbest.SetLineStyle(1)
@@ -760,13 +870,14 @@ def NormAndDrawST(stHist,j,ExcOrInc,stRefHist,WriteCanvas,Signals=None):
         legend = TLegend(0.55, 0.8, 0.8, 0.9,"", "brNDC")
         tex.DrawLatex(0.28,0.75,"N = %i"%j if ExcOrInc=="Exc" else "N #geq %i"%j)
     else:
-        legend = TLegend(0.50, 0.5, 0.8, 0.85,"", "brNDC")
-        tex.DrawLatex(0.28,0.75,"N = %i"%j if ExcOrInc=="Exc" else "N #geq %i"%j)
+        legend = TLegend(0.60, 0.6, 0.85, 0.85,"", "brNDC")
+        tex.DrawLatex(0.28,0.6,"N = %i"%j if ExcOrInc=="Exc" else "N #geq %i"%j)
     if 'TLegXmin' in plotSettings.keys():
         CMS_lumi.relPosX = 0.05
         tex.DrawLatex(0.2,0.75,"N = %i"%j if ExcOrInc=="Exc" else "N #geq %i"%j)
         legend = TLegend(plotSettings['TLegXmin'], 0.475, 0.8, 0.85,"", "brNDC")
-    legend.SetTextSize(0.05);
+    #legend.SetTextSize(0.05);
+    legend.SetTextSize(0.03);
     legend.SetLineWidth(1);
     legend.SetBorderSize(0);
     legend.SetFillStyle(1001);
@@ -784,8 +895,8 @@ def NormAndDrawST(stHist,j,ExcOrInc,stRefHist,WriteCanvas,Signals=None):
         else:
             legend.AddEntry(stHist,"Data","ep");
     if DrawUncertainty:
-        legend.AddEntry(fillGraph,"Background shape","fl");
-        legend.AddEntry(fLow_norm,"Systematic uncertainties","l");
+        # legend.AddEntry(fillGraph,"Background shape","fl");
+        # legend.AddEntry(fLow_norm,"Systematic uncertainties","l");
         if (ExcOrInc=="Inc"):
             legend.AddEntry(box,"Normalization region","f");
         if (ExcOrInc=="Exc"):
@@ -817,7 +928,6 @@ def NormAndDrawST(stHist,j,ExcOrInc,stRefHist,WriteCanvas,Signals=None):
     legend.Draw()
 
     CMS_lumi.CMS_lumi(STcomparisons[canvasName], iPeriod, iPos)
-
     STcomparisons[canvasName].cd()
     STcomparisons[canvasName].Update()
     STcomparisons[canvasName].RedrawAxis()
@@ -939,43 +1049,44 @@ def NormAndDrawST(stHist,j,ExcOrInc,stRefHist,WriteCanvas,Signals=None):
         stExcRatio.Draw("same EP")
 
 
+
     #Draw Fit uncertainty
     if DrawUncertainty:
         if(not DrawPullPanel):
-            if(ExcOrInc=="Exc"):
-                RatioFillGraphs = getRatioFillGraph(fLow, fUp, fbest ,0)
-            if(ExcOrInc=="Inc"):
-                RatioFillGraphs = getRatioFillGraph(fLow, fUp, fbest ,FracNormErrors_exc3["Inc%s"%j])
-            if DrawRatioPanel:
-                RatioFillGraphs["gFill"].SetFillColorAlpha(kGray,0.35)
-                #RatioFillGraphs["gFill"].SetFillColor(kGray)
-                RatioFillGraphs["gFill"].SetFillStyle(1001)
-                RatioFillGraphs["gFill"].SetLineColor(kBlue)
-                RatioFillGraphs["gFill"].Draw("sameF")
-                RatioFillGraphs["gUp"].SetLineColor(kBlue)
-                RatioFillGraphs["gUp"].Draw("sameC")
-                RatioFillGraphs["gDown"].SetLineColor(kBlue)
-                RatioFillGraphs["gDown"].Draw("sameC")
-                RatioFillGraphs["gUp_norm"].SetLineColor(kRed)
-                RatioFillGraphs["gUp_norm"].Draw("sameC Y+")
-                RatioFillGraphs["gDown_norm"].SetLineColor(kRed)
-                RatioFillGraphs["gDown_norm"].Draw("sameC Y+")
-            else:
-                RatioFillGraphs["gFill"].SetFillColorAlpha(kGray,0.35)
-                #RatioFillGraphs["gFill"].SetFillColor(kGray)
-                RatioFillGraphs["gFill"].SetFillStyle(1001)
-                RatioFillGraphs["gFill"].SetLineColor(kBlue)
-                RatioFillGraphs["gFill"].Draw("sameF")
-                RatioFillGraphs["gUp"].SetLineColor(kBlue)
-                RatioFillGraphs["gUp"].Draw("sameC")
-                RatioFillGraphs["gDown"].SetLineColor(kBlue)
-                RatioFillGraphs["gDown"].Draw("sameC")
-                RatioFillGraphs["gbest"].SetLineColor(kBlack)
-                RatioFillGraphs["gbest"].Draw("sameC")
-                RatioFillGraphs["gUp_norm"].SetLineColor(kRed)
-                RatioFillGraphs["gUp_norm"].Draw("sameC")
-                RatioFillGraphs["gDown_norm"].SetLineColor(kRed)
-                RatioFillGraphs["gDown_norm"].Draw("sameC")
+            # if(ExcOrInc=="Exc"):
+                # RatioFillGraphs = getRatioFillGraph(fLow, fUp, fbest ,0)
+            # if(ExcOrInc=="Inc"):
+                # RatioFillGraphs = getRatioFillGraph(fLow, fUp, fbest ,FracNormErrors_exc3["Inc%s"%j])
+            # if DrawRatioPanel:
+            #     RatioFillGraphs["gFill"].SetFillColorAlpha(kGray,0.35)
+            #     #RatioFillGraphs["gFill"].SetFillColor(kGray)
+            #     RatioFillGraphs["gFill"].SetFillStyle(1001)
+            #     RatioFillGraphs["gFill"].SetLineColor(kBlue)
+            #     RatioFillGraphs["gFill"].Draw("sameF")
+            #     RatioFillGraphs["gUp"].SetLineColor(kBlue)
+            #     RatioFillGraphs["gUp"].Draw("sameC")
+            #     RatioFillGraphs["gDown"].SetLineColor(kBlue)
+            #     RatioFillGraphs["gDown"].Draw("sameC")
+            #     RatioFillGraphs["gUp_norm"].SetLineColor(kRed)
+            #     RatioFillGraphs["gUp_norm"].Draw("sameC Y+")
+            #     RatioFillGraphs["gDown_norm"].SetLineColor(kRed)
+            #     RatioFillGraphs["gDown_norm"].Draw("sameC Y+")
+            # else:
+            #     RatioFillGraphs["gFill"].SetFillColorAlpha(kGray,0.35)
+            #     #RatioFillGraphs["gFill"].SetFillColor(kGray)
+            #     RatioFillGraphs["gFill"].SetFillStyle(1001)
+            #     RatioFillGraphs["gFill"].SetLineColor(kBlue)
+            #     RatioFillGraphs["gFill"].Draw("sameF")
+            #     RatioFillGraphs["gUp"].SetLineColor(kBlue)
+            #     RatioFillGraphs["gUp"].Draw("sameC")
+            #     RatioFillGraphs["gDown"].SetLineColor(kBlue)
+            #     RatioFillGraphs["gDown"].Draw("sameC")
+            #     RatioFillGraphs["gbest"].SetLineColor(kBlack)
+            #     RatioFillGraphs["gbest"].Draw("sameC")
+            #     RatioFillGraphs["gUp_norm"].SetLineColor(kRed)
+            #     RatioFillGraphs["gUp_norm"].Draw("sameC")
+            #     RatioFillGraphs["gDown_norm"].SetLineColor(kRed)
+            #     RatioFillGraphs["gDown_norm"].Draw("sameC")
             stExcRatio.Draw("sameEP")
     else:
         fpulls = []
@@ -1039,12 +1150,13 @@ def NormAndDrawST(stHist,j,ExcOrInc,stRefHist,WriteCanvas,Signals=None):
     if (WriteDataCards and ExcOrInc=="Inc"):
         outputForLimits = open("output/%s_Inclusive%i.txt"%(argv[2].replace(".root",""),j), "w")
         outputForLimits.write("STMin::Observed_Data::Expected_Bkg::Shape_Unc_down::Shap_Unc_up::Norm_Unc\n")
-        for stmin in range(25, 100):
+        for stmin in range(25, 90):
             observed=0
             startbin=stHist.GetXaxis().FindBin(float(stmin*100))
             for stbin in range (startbin, stHist.GetXaxis().GetNbins()):
                 observed+=stHist.GetBinContent(stbin)
-            expected = fbest.Integral(stmin*100, 11000)/binwidth
+            expected = fbest.Integral(stmin*100, 13000)/binwidth * norm_factor
+            #expected = fbest_normalized.Integral(stmin * 100, 13000)/binwidth
             #shapeUnc = (fLow.Integral(stmin*100, 11000)/binwidth)/expected
             #shapeUnc = abs(fLow.Integral(stmin*100, 11000)/binwidth-expected)/expected +1
             #shapeUnc = abs(fUp.Integral(stmin*100, 11000)/binwidth-expected)/expected +1
@@ -1052,13 +1164,14 @@ def NormAndDrawST(stHist,j,ExcOrInc,stRefHist,WriteCanvas,Signals=None):
             #format for datacard for using asymmetric log-normal
             #shapeUncLow = (GraphIntegrate(fLow_norm,stmin*100, 11000,(11000-stmin*100)/50)/binwidth) /expected
             #shapeUncUp  = (GraphIntegrate(fUp_norm,stmin*100, 11000,(11000-stmin*100)/50)/binwidth)  /expected
-            shapeUncLow = (fLow.Integral(stmin*100, 11000)/binwidth)/expected
-            shapeUncUp  = (fUp.Integral(stmin*100, 11000)/binwidth)/expected
+            # shapeUncLow = (fLow.Integral(stmin*100, 13000)/binwidth)/expected
+            # shapeUncUp  = (fUp.Integral(stmin*100, 13000)/binwidth)/expected
             Norm_Unc    = FracNormErrors_exc3["Inc%s"%j] +1
             #print stmin*100, shapeUnc, shapeNormUncLow, expected
             #print stmin*100, fLow.Eval(stmin*100), fLow_norm.Eval(stmin*100)
             if not ((j>5 and stmin<23) or (j>8 and stmin<25) or (j>10 and stmin<26)):
-                outputForLimits.write("%i  %i  %f  %f %f %f\n" % (stmin*100, observed, expected, shapeUncLow, shapeUncUp, Norm_Unc))
+                #outputForLimits.write("%i  %i  %f  %f %f %f\n" % (stmin*100, observed, expected, shapeUncLow, shapeUncUp, Norm_Unc))
+                outputForLimits.write("%i  %i  %f\n" % (stmin*100, observed, expected))
         outputForLimits.close()
 
 
@@ -1268,6 +1381,8 @@ if(not useMET):
 stExc2Hist =PlotsDir.Get(histname02)
 stExc3Hist =PlotsDir.Get(histname03)
 stExc4Hist =PlotsDir.Get(histname04)
+
+
 #stExc2or3Hist = stExc2Hist.Clone("stExc0203Hist")
 #stExc2or3Hist.Add(stExc3Hist)
 
@@ -1310,6 +1425,9 @@ for flist in AllFitList:
             customfit( flist[fname], refhist,"exc2")
         if("exc3" in fname):
             refhist = stExc3Hist
+            refhist_unc = refhist.Clone();
+            for i in range(0,refhist.GetNbinsX()):
+	           refhist_unc.SetBinError(i, (refhist.GetBinError(i)+refhist.GetBinError(refhist.FindBin(5500))));
             flist[fname].SetLineStyle(2)
             chi2graphs_norm[fname].SetLineStyle(2)
             customfit( flist[fname], refhist,"exc3")
@@ -1407,6 +1525,7 @@ for j in range(2,12):
     stExc2Hist=PlotsDir.Get(Exc02HistName)
     stExc3Hist=PlotsDir.Get(Exc03HistName)
     stExc4Hist=PlotsDir.Get(Exc04HistName)
+
 
     #Get histograms for all signals
     for signalListName,signalList in SignalLists.items():
